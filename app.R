@@ -18,7 +18,7 @@ dataframe_factory <-  function(key, meta_data){
          "genome" = {
            genome <- as.data.frame(t(unlist(meta_data$genome)))
            genome <- (rbind(genome[,1:4], genome[,5:8]))
-           return(genome)
+           return(genome %>% as.data.frame())
          },
          "objective" ={
            df <-  as.data.frame(t(unlist(meta_data[[key]])))
@@ -39,8 +39,8 @@ dataframe_factory <-  function(key, meta_data){
 }#dataframe factory
 
 readOMResult <- function(path){
-  # path <- ("~/dev/openmoleR/result/data/")
-    file.l <- list.files(path)
+    
+  file.l <- list.files(path)
   result_data <- data.frame()
   for(i in 1:length(file.l)){
     
@@ -49,15 +49,47 @@ readOMResult <- function(path){
     result_data <- rbind(result_data,tmp)
   }
   result_data$ID <-  seq.int(from = 1,to=nrow(result_data))
-  cat(str(result_data), "####")
   return(result_data)
 }
 
+inputsSPLOMMaker <- function(meta_data, simuData) {
+  rawInputs <-  meta_data$genome
+  dfInputsDescription <- data.frame()
+  for (r in rawInputs) {
+    dfInputsDescription <-rbind (dfInputsDescription, r %>% as.data.frame())
+  }
+  
+  inputsNames <-  dfInputsDescription$value %>% as.character()
+  inputsValues <- simuData %>% select(inputsNames)
+  
+  pltly_splom_dimlist_maker <-  function(name, simuData) {
+    #the values to be named
+    vv <- simuData[, name]
+    ## the list formatted to fit ploty splom dimensions argument
+    return(list(label = name, values = vv))
+  }
+  splomDims <-lapply(inputsNames, pltly_splom_dimlist_maker, inputsValues)
+  
+  #plotly creation
+  fig <-  plot_ly(data = simuData)
+  fig <-  fig %>%  add_trace(
+    type = 'splom',
+    dimensions = splomDims,
+    marker = list(size = 7,
+                  color = "red")
+  )
+  fig <- fig %>% style(showupperhalf = F)
+  return(fig)
+}
 
 
 myPath <-  NULL
 keys <- NULL
 cradoGlobalK <-  NULL
+meta_data <-  NULL
+filename <-  NULL
+
+
 # Define UI for application that draws a histogram
 ui <- fluidPage(
    
@@ -74,27 +106,24 @@ ui <- fluidPage(
                      "tgz")
          )
        
-      ),
+         ,width = 2),
       
-      # Show a plot of the generated distribution
       mainPanel(
         
         tabsetPanel(
           tabPanel("MetaData",  uiOutput("tables")),
           tabPanel("Input-OutPut Spaces", 
                    fluidRow(
-                     column(6,plotOutput("inputSpace")),
+                     column(6,plotlyOutput("inputSpace")),
                      column(6, plotOutput("outputSpace"))
                    )
                    
                    ),#second tabPanel
           tabPanel("Full OM Data", tableOutput("fulldata"))
         )
-         
-        
       )#mainPanel
    )#sidebarlayout
-)
+)#ui
 
 # Define server logic required to draw a histogram
 server <- function(input, output) {
@@ -104,10 +133,11 @@ server <- function(input, output) {
   if(input$file1 %>% is.null()){NULL}
     else{
       inFile <- input$file1
+      filename <<- sub('\\.tgz$', '', inFile$name) 
       myPath <<- gsub("(.*)/.*","\\1", inFile$datapath)
       untar(inFile$datapath, exdir = myPath)
-
-      meta_data <-read_json(paste0(myPath,"/result/method.omr"))
+    meta_data <<-read_json(paste0(myPath,"/", filename, "/method.omr"))
+      cat("omr file loaded \n")
       keys <<-  names(meta_data)
 
 }#else
@@ -127,49 +157,42 @@ server <- function(input, output) {
   
   
   output$fulldata <-  renderTable({
-    readOMResult(paste0(myPath,"/result/data/"))
+    readOMResult(paste0(myPath,"/", filename,"/data/"))
     })
   
   
-  output$inputSpace <- renderPlot(
+  output$inputSpace <- renderPlotly({
+     simuData <- readOMResult(paste0(myPath,"/", filename,"/data/"))
+   cat("simulation data loaded in renderplotly")
+      inputsSPLOMMaker(meta_data,simuData ) 
+  })# renderPLot
+  
+  
+  output$outputSpace <- renderPlot({
     plot(iris)
-        # fig <-  plot_ly(data = meta_data)
-    # fig <-  fig %>%  add_trace(
-    #   
-    #   type = 'splom',
-    #   dimensions = list(
-    #     list(label='sepal length', values=~sepal.length),
-    #     list(label='sepal width', values=~sepal.width),
-    #     list(label='petal length', values=~petal.length),
-    #     list(label='petal width', values=~petal.width)
-    #   ),
-    #   text=~class,
-    #   marker = list(
-    #     color = as.integer(df$class),
-    #     colorscale = pl_colorscale,
-    #     size = 7,
-    #     line = list(
-    #       width = 1,
-    #       color = 'rgb(230,230,230)'
-    #     )
-    #   )
-    # )
-    # 
-    # fig <- fig %>%  style(diagonal = list(visible = F), showupperhalf = F)
-)# renderPLot
-  
-  
-  output$outputSpace <- renderPlot(plot(iris))
+                                    })#renderplot
 
 
-  
-  extractinput <-  function() {} 
-  
 }#serverfunction 
 
 
 # Run the application 
 shinyApp(ui = ui, server = server)
+
+# 
+# 
+# setwd("/home/chap/dev/RopenMOLE")
+#  myPath <- "/tmp/resultbig/data/"
+# xx <- readOMResult(myPath)
+#  
+# head(xx)
+# inFile <- "result.tgz"
+# untar(inFile, exdir = myPath)
+# meta_data <<-read_json(paste0(myPath,"/result/method.omr"))
+# keys <<-  names(meta_data)
+# simuData <-  readOMResult(paste0(myPath,"/result/data/"))
+# 
+
 
 
 
