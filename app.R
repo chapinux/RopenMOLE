@@ -5,7 +5,8 @@ library(dplyr)
 library(plotly)
 library(data.table)
 library(DT)
-
+library(ggforce)
+library(shinycssloaders)
 #set size limit for results files input 
 maxMegaBytesSize <-  50 
 options(shiny.maxRequestSize=maxMegaBytesSize*1024^2)
@@ -96,7 +97,33 @@ SPLOMMaker <- function(meta_data, fulldata, type){
   return(fig)
 }
 
-
+calibration_dynamic_plot_maker <- function(meta_data, fulldata, makeBoxPlot){
+  #last quarter objectives by generation time series plot
+  
+  gens <-  fulldata$evolution.generation %>% unique()
+  lastquarter_gen <- quantile(gens)[4] 
+  first_gen_last_quarter <- gens[which.min(abs(gens-lastquarter_gen ))]
+  last_quarter_data <-  fulldata %>% filter(evolution.generation >= first_gen_last_quarter) %>% dplyr::arrange(evolution.generation)
+  cat("lastquarte is ", nrow(last_quarter_data),"\n")
+  # get objectives names
+  # CAUTION dirty trick to extract duplicate names in named array 
+  objectivesNames <- meta_data$objective %>% unlist()  
+  objectivesNames <- objectivesNames[names(objectivesNames) =="name"] %>% as.character()
+  
+  #using ggforce facet matrix to obtain every objective versus genereation( which is ~ time of the exploration)
+  obj_over_gen_plot <- ggplot(last_quarter_data)+
+    geom_point(aes(x = .panel_x, y = .panel_y))+
+    facet_matrix(rows=vars(all_of(objectivesNames)), cols = vars(evolution.generation))
+  
+  boxplot_by_gen <- ggplot(last_quarter_data)+
+    geom_boxplot(aes(x = .panel_x, y = .panel_y, group=evolution.generation))+
+    facet_matrix(rows=vars(all_of(objectivesNames)), cols = vars(evolution.generation))
+  if(makeBoxPlot){
+    print(boxplot_by_gen)
+  }else{
+  print(obj_over_gen_plot)
+  }
+}
 
 
 # Define UI for application that draws a histogram
@@ -123,16 +150,19 @@ ui <- fluidPage(
     mainPanel(
       
       tabsetPanel(
-        tabPanel("MetaData",  uiOutput("tables")),
+        tabPanel("MetaData",  uiOutput("tables") %>% withSpinner()),
         tabPanel("Input-OutPut Spaces", 
                  fluidRow(
-                   column(6,plotlyOutput("inputSpace")),
-                   column(6, plotlyOutput("outputSpace"))
+                   column(6,plotlyOutput("inputSpace") %>% withSpinner()),
+                   column(6, plotlyOutput("outputSpace") %>% withSpinner())
                  )
                  
         ),#second tabPanel
-        tabPanel("Objectives over time"), #third tabpanel
-        tabPanel("Full result data",DT:: dataTableOutput("fulldata"))
+        tabPanel("Objectives over time",
+                 plotOutput("objective_over_gen", height= "250px") %>% withSpinner(),
+                 checkboxInput("make_obj_gen_Boxplot", "draw boxplot by generation", value = FALSE)
+                 ), #third tabpanel (objectives over time)
+        tabPanel("Full result data",DT:: dataTableOutput("fulldata") %>% withSpinner())
       )
     )#mainPanel
   )#sidebarlayout
@@ -173,7 +203,7 @@ server <- function(input, output) {
     }#if not null
     
     output$tables <- renderUI({
-      lapply(keys, tableOutput)
+      lapply(keys, tableOutput )
     }) #renderUI
   })#observe
   
@@ -181,8 +211,7 @@ server <- function(input, output) {
   
   
   output$fulldata <-  DT::renderDataTable({
-   fulldata,
-    server=TRUE
+   fulldata
   })
   
   
@@ -195,6 +224,10 @@ server <- function(input, output) {
     SPLOMMaker(meta_data,fulldata, "output" ) 
   })#renderplot
   
+  
+  output$objective_over_gen <- renderPlot({
+    calibration_dynamic_plot_maker(meta_data, fulldata, input$make_obj_gen_Boxplot)
+  })
   
 }#serverfunction 
 
@@ -231,52 +264,44 @@ keys <<-  names(meta_data)
 
 # 
 
-# inputsSPLOMMaker <- function(meta_data, fulldata) {
-#getting inputs name in case of NSGA2
 
-rawInputs <-  meta_data$genome
-rawOutputs <- meta_data$objective
-
-dfInputsDescription <- data.frame()
-for (r in rawInputs) {
-  dfInputsDescription <-rbind (dfInputsDescription, r %>% as.data.frame())
-}
-inputsNames <-  dfInputsDescription$name %>% as.character()
-
-# plotly needs formulas to feed the SPLOM graph
-# function to convert dataframe column to formula
-formulaMaker <-  function(x){return(formula(fulldata %>% select(all_of(x))))}
-# get formulas 
-splomDimsFormulas <-lapply(inputsNames, formulaMaker)
-
-# prepare items of the dimensions atytributs of plotly objectds
-itemMaker <-  function(name, valueformula){
-  return(list(label=name, values=formulaMaker(name)))
-}
-# make a list of couples (name, formula)
-splomDims <- lapply(inputsNames,itemMaker, splomDimsFormulas )
-
-#plotly creation
-fig <-  plot_ly(data = fulldata)
-fig <-  fig %>%  add_trace(
-  type = 'splom',
-  dimensions = splomDims,
-  marker = list(size = 3,
-                color = "red")
-)
-fig <- fig %>% style(showupperhalf = F, diagonal=list(visible=FALSE))
-return(fig)
-# }
+genome <- unlist(meta_data$genome)
+genomeNames <- genome[names(genome)=="name"]
+genomeLows  <- genome[names(genome)=="low"] %>% as.numeric()
+genomehighs  <- genome[names(genome)=="high"] %>% as.numeric()
+genomeimplem  <- genome[names(genome)=="implementation"]
+genome <- data.frame(name=genomeNames,low=genomeLows,high=genomehighs,implementation=genomeimplem)
 
 
+objectivesNames <- meta_data$objective %>% unlist()  
+objectivesNames <- objectivesNames[names(objectivesNames) =="name"] %>% as.character()
+
+switch(key,
+       "genome" = {
+         genome <- as.data.frame()
+         genome <- (rbind(genome[,1:4], genome[,5:8]))
+         return(genome %>% as.data.frame())
+       },
+       "objective" ={
+         df <-  as.data.frame(t(unlist(meta_data[[key]])))
+         return(df)
+       },
+       "saved" = {
+         df <-  as.data.frame(t(unlist(meta_data[[key]])))
+         return(df)
+       },
+       "mu"= {meta_data[[key]]},
+       "sample"={meta_data[[key]]},
+       "implementation" ={meta_data[[key]]},
+       "method"={meta_data[[key]]}
 
 
 
 #selection of inputs and outputs
-slct_O <-  c ("deltaFood1", "deltaFood2", "deltaFood3")
-slct_I <- c("i1", "i2", "i3", "i4")  
-
-diagonalMatriceInput <- interaction(slct_I,slct_I, sep="vs.", lex.order = TRUE)
-combinaisons <- diagonalMatriceInput %>% levels() 
-combinaisons[-match(diagonalMatriceInput,combinaisons)]
+# slct_O <-  c ("deltaFood1", "deltaFood2", "deltaFood3")
+# slct_I <- c("i1", "i2", "i3", "i4")  
+# 
+# diagonalMatriceInput <- interaction(slct_I,slct_I, sep="vs.", lex.order = TRUE)
+# combinaisons <- diagonalMatriceInput %>% levels() 
+# combinaisons[-match(diagonalMatriceInput,combinaisons)]
 
