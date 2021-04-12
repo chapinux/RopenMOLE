@@ -168,6 +168,8 @@ ui <- fluidPage(
                  plotOutput("objective_over_gen", height= "250px") %>% withSpinner(),
                  checkboxInput("make_obj_gen_Boxplot", "draw boxplot by generation", value = FALSE)
                  ), #third tabpanel (objectives over time)
+        tabPanel("Back and Forth",
+                  plotlyOutput("pingpong") %>% withSpinner()),
         tabPanel("Full result data",DT:: dataTableOutput("fulldata") %>% withSpinner())
       )
     )#mainPanel
@@ -228,6 +230,10 @@ server <- function(input, output) {
   
   output$outputSpace <- renderPlotly({
     SPLOMMaker(meta_data,fulldata, "output" ) 
+  })#renderplot
+  
+  output$pingpong <- renderPlotly({
+    pingpongPlot(meta_data,fulldata) 
   })#renderplot
   
   
@@ -302,12 +308,23 @@ itemMaker <-  function(name, valueformula, fulldata){
 
 
 
-pingpongPlot <- function(genomeNames, objectivesNames, fulldata){
+pingpongPlot <- function(meta_data, fulldata){
 #check length of data , more than 6M is too much 
 if(fulldata %>% nrow() >= 6001 ){warning("too much data to handle ! Data reduced to 6000 lines\n")
   fulldata <- sample_n(fulldata, 6000)
   }
 
+ 
+  genome <- unlist(meta_data$genome)
+  genomeNames <- genome[names(genome)=="name"]
+ 
+  objectivesNames <- meta_data$objective %>% unlist()  
+  objectivesNames <- objectivesNames[names(objectivesNames) =="name"] %>% as.character()
+  
+  
+  
+  
+  
 #plot preparation
 pp <-  highlight_key(fulldata)
 base <- plot_ly(pp, color = I("black"), showlegend = FALSE)
@@ -364,8 +381,8 @@ return(finalplot)
 
 
 #export
-library(htmlwidgets)
-saveWidget(finalplot, "~/tmp/pingpong.html")
+# library(htmlwidgets)
+# saveWidget(finalplot, "~/tmp/pingpong.html")
 
 
 
