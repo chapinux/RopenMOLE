@@ -131,6 +131,92 @@ calibration_dynamic_plot_maker <- function(meta_data, fulldata, makeBoxPlot){
   }
 }
 
+formulaMaker <-  function(x,fulldata){return(formula(fulldata %>% select(all_of(x))))}
+# get formulas 
+
+# prepare items of the dimensions attributs of plotly objectds
+itemMaker <-  function(name, valueformula, fulldata){
+  return(list(label=name, values=formulaMaker(name)))
+}
+
+
+
+
+
+
+pingpongPlot <- function(meta_data, fulldata){
+  #check length of data , more than 6M is too much 
+  if(fulldata %>% nrow() >= 6001 ){warning("too much data to handle ! Data reduced to 6000 lines\n")
+    fulldata <- sample_n(fulldata, 6000)
+  }
+  
+  
+  genome <- unlist(meta_data$genome)
+  genomeNames <- genome[names(genome)=="name"]
+  
+  objectivesNames <- meta_data$objective %>% unlist()  
+  objectivesNames <- objectivesNames[names(objectivesNames) =="name"] %>% as.character()
+  
+  
+  
+  
+  
+  #plot preparation
+  pp <-  highlight_key(fulldata)
+  base <- plot_ly(pp, color = I("black"), showlegend = FALSE)
+  
+  #input subplot generation
+  inputFormulas <-lapply(genomeNames, formulaMaker, fulldata)
+  inputplt <-  list()
+  while(length(inputFormulas)>0){
+    if(length(inputFormulas)>1){
+      formula1 <- inputFormulas[[1]]
+      formula2 <- inputFormulas[[2]]
+      # add scatterplot to list
+      inputplt <-c(inputplt, add_markers(base, x=formula1, y=formula2,marker=list(color="#29AF7F")) %>% toWebGL() %>% list()) 
+      inputFormulas <- inputFormulas[-c(1,2)]
+    }
+    if(length(inputFormulas)==1){
+      #append histogramm to list
+      formula1 <- inputFormulas[[1]]
+      inputplt  <- c(inputplt,add_trace(base, x=formula1, type="histogram", marker=list(color="#29AF7F")) %>% toWebGL() %>% list()  )
+    }
+  }
+  
+  
+  
+  # p2 <-  add_markers(base, x=~i3, y=~i4) %>% toWebGL()
+  # inputplt <-  list(p1,p2)
+  
+  #output subplot generation
+  outputFormulas <-lapply(objectivesNames, formulaMaker, fulldata)
+  outputplt <- list()
+  while(length(outputFormulas)>0){
+    if(length(outputFormulas)>1){
+      formula1 <- outputFormulas[[1]]
+      formula2 <- outputFormulas[[2]]
+      # append scatterplot to list
+      outputplt <-c(outputplt, add_markers(base, x=formula1, y=formula2, marker=list(color="#482677")) %>% toWebGL() %>% list()) 
+      outputFormulas <- outputFormulas[-c(1,2)]
+    }
+    if(length(outputFormulas)==1){
+      #add histogramm to list
+      formula1 <- outputFormulas[[1]]
+      outputplt  <- c(outputplt,add_trace(base, x=formula1, type="histogram", marker=list(color="#482677")) %>% toWebGL() %>% list() )
+      outputFormulas <- outputFormulas[-1]
+    }
+  }
+  
+  
+  #assemble like avengers
+  finalplot <- subplot(subplot(inputplt,nrows = length(inputplt)),subplot(outputplt,nrows=length(outputplt)))
+  finalplot <- layout(finalplot, dragmode="lasso")
+  finalplot <- highlight(finalplot, on="plotly_selected", off="plotly_doubleclick")
+  return(finalplot)
+}
+
+
+
 
 # Define UI for application that draws a histogram
 ui <- fluidPage(
@@ -252,6 +338,10 @@ fulldata <- NULL
 filename <-  NULL
 shinyApp(ui = ui, server = server)
 
+
+
+
+
 # 
 # 
 setwd("/home/paulchapron/dev/RopenMOLE")
@@ -295,89 +385,6 @@ objectivesNames <- objectivesNames[names(objectivesNames) =="name"] %>% as.chara
  
 
 
-formulaMaker <-  function(x,fulldata){return(formula(fulldata %>% select(all_of(x))))}
-# get formulas 
-
-# prepare items of the dimensions attributs of plotly objectds
-itemMaker <-  function(name, valueformula, fulldata){
-  return(list(label=name, values=formulaMaker(name)))
-}
-
-
-
-
-
-
-pingpongPlot <- function(meta_data, fulldata){
-#check length of data , more than 6M is too much 
-if(fulldata %>% nrow() >= 6001 ){warning("too much data to handle ! Data reduced to 6000 lines\n")
-  fulldata <- sample_n(fulldata, 6000)
-  }
-
- 
-  genome <- unlist(meta_data$genome)
-  genomeNames <- genome[names(genome)=="name"]
- 
-  objectivesNames <- meta_data$objective %>% unlist()  
-  objectivesNames <- objectivesNames[names(objectivesNames) =="name"] %>% as.character()
-  
-  
-  
-  
-  
-#plot preparation
-pp <-  highlight_key(fulldata)
-base <- plot_ly(pp, color = I("black"), showlegend = FALSE)
-
-#input subplot generation
-inputFormulas <-lapply(genomeNames, formulaMaker, fulldata)
-inputplt <-  list()
-while(length(inputFormulas)>0){
-  if(length(inputFormulas)>1){
-  formula1 <- inputFormulas[[1]]
-  formula2 <- inputFormulas[[2]]
-  # add scatterplot to list
-  inputplt <-c(inputplt, add_markers(base, x=formula1, y=formula2,marker=list(color="#29AF7F")) %>% toWebGL() %>% list()) 
-  inputFormulas <- inputFormulas[-c(1,2)]
-  }
-  if(length(inputFormulas)==1){
-    #append histogramm to list
-  formula1 <- inputFormulas[[1]]
-  inputplt  <- c(inputplt,add_trace(base, x=formula1, type="histogram", marker=list(color="#29AF7F")) %>% toWebGL() %>% list()  )
-  }
-}
-
-
-
-# p2 <-  add_markers(base, x=~i3, y=~i4) %>% toWebGL()
-# inputplt <-  list(p1,p2)
-
-#output subplot generation
-outputFormulas <-lapply(objectivesNames, formulaMaker, fulldata)
-outputplt <- list()
-while(length(outputFormulas)>0){
-  if(length(outputFormulas)>1){
-    formula1 <- outputFormulas[[1]]
-    formula2 <- outputFormulas[[2]]
-    # append scatterplot to list
-    outputplt <-c(outputplt, add_markers(base, x=formula1, y=formula2, marker=list(color="#482677")) %>% toWebGL() %>% list()) 
-    outputFormulas <- outputFormulas[-c(1,2)]
-  }
-  if(length(outputFormulas)==1){
-    #add histogramm to list
-    formula1 <- outputFormulas[[1]]
-    outputplt  <- c(outputplt,add_trace(base, x=formula1, type="histogram", marker=list(color="#482677")) %>% toWebGL() %>% list() )
-    outputFormulas <- outputFormulas[-1]
-  }
-}
-
- 
-#assemble like avengers
-finalplot <- subplot(subplot(inputplt,nrows = length(inputplt)),subplot(outputplt,nrows=length(outputplt)))
-finalplot <- layout(finalplot, dragmode="lasso")
-finalplot <- highlight(finalplot, on="plotly_selected", off="plotly_doubleclick")
-return(finalplot)
-}
 
 
 #export
