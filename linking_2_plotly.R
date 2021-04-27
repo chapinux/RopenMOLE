@@ -22,24 +22,26 @@ plot(df[,1:4])
 # affichage plotly
 library(plotly)
 
+
+#highlight key pour définir les variables à query lors de la selection d'un individu dans le graphique 
+#ici je surveille tout , mais on peut ne surveiller qu'une selection de colonnes
 pp <- highlight_key(df)
+
+
+# objet plotly vide (= sans trace)
 base <- plot_ly(pp, color = I("black"), showlegend = FALSE)
-
-
-
-base
-
-
+#ajout des traces
 p1 <- add_trace(base, x = ~I1)
 p2 <- add_trace(base, x = ~I4)
 p3 <- add_trace(base, x = ~O1, y = ~O2)
 
 
 
-
+#layout pour la disposition des subplots 
 finalplot <- subplot(subplot(p1,p2, nrows=2),p3)
-
+#optionnel : définition du mode de selection 
 finalplot <- layout(finalplot, dragmode="lasso")
+# définition de la MAJ du dessins en fonction de l'évènement utilisateur (souris)
 finalplot <- highlight(finalplot, on="plotly_selected")
 
 finalplot

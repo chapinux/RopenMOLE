@@ -19,11 +19,11 @@ inputColor <- "#29AF7F"
 outputColor <- "#482677"
 
   
-  
+setwd("~/dev/RopenMOLE/")  
 source("./OMdataRead.R")
 source("./evolutionPlot.R")
 source("./evolutionMetadataRead.R")
-
+source("./PSEMetadataRead.R")
 
 
 
@@ -98,15 +98,19 @@ ui <- fluidPage(# Application title
         filename <<- sub('\\.tgz$', '', inFile$name)
         cat("filename:",
             inFile$name,
-            "\n datapath",
+            "\n datapath: ",
             inFile$datapath,
             "\n")
         # keep only the directories in path
         myPath <<- gsub("(.*)/.*", "\\1", inFile$datapath)
-        cat(myPath, "#####\n")
         untar(inFile$datapath, exdir = myPath)
-        dataPath <-  paste0(myPath, "/result/data")
-        metadataPath <-  paste0(myPath, "/result")
+        
+        cat(myPath, "contains untar of results archive  #####\n")
+        metadataPath <- list.files(myPath, pattern = "\\.omr$", recursive = T)
+        cat("****** omr path=>", metadataPath, "\n")
+        dataPath <-  dir(path = myPath, pattern = "data", )
+        cat("****** data path=>", dataPath, "\n")
+        
         file.l <- list.files(dataPath)
        
         if (input$sizeLimiting) {
@@ -124,7 +128,13 @@ ui <- fluidPage(# Application title
    
     
     output$metadataDisplay <- renderUI({
-      if(! is.null(meta_data)){metadataDisplayer(meta_data)}
+      if(! is.null(meta_data)){
+        
+        switch (meta_data$implementation,
+          "StochasticPSE" = PSE_metadataDisplayer(meta_data),
+          "StochasticNSGA2" = Evolution_metadataDisplayer(meta_data),
+        )
+      }
       else{
         h4("no meta data")
       }
@@ -176,30 +186,26 @@ ui <- fluidPage(# Application title
   #########################################""
   
   
+  # keep only the directories in path
+  myPath <- "/tmp/"
+  untar("~/dev/RopenMOLE/pse.tgz", exdir = myPath)
   
-  # setwd("/home/paulchapron/dev/RopenMOLE")
-  # myPath <- "./result/data/"
-  # file.l <- list.files(myPath)
-  # cat(length(file.l), "files in the archive ")
-  # result_data <- list()
-  # for (i in 1:length(file.l)) {
-  #   tmp <- fromJSON(paste0(myPath, file.l[i])) %>% as.data.frame
-  #   tmp$filenames <- file.l[i]
-  #   result_data[[i]] <- tmp
-  #   if (i %% 100 == 0) {
-  #     cat("file ", i, " / ", length(file.l), "\n")
-  #   }
-  # }
-  # 
-  # 
-  # fulldata <- rbindlist(result_data)
-  # fulldata <- sample_n(fulldata, 6000)
-  # # untar(inFile, exdir = myPath)
-  # 
-  # meta_data <<- read_json("./result/method.omr")
+  cat(myPath, "contains untar of results archive  #####\n")
+  metadataPath <- list.files(myPath, pattern = "\\.omr$", recursive = T, full.names = T)
+  cat("****** omr path=>", metadataPath, "\n")
+  dataPath <-  dir(path = myPath, recursive = T, pattern = "*ata*")
+  cat("****** data path=>", dataPath, "\n")
   
+  file.l <- list.files(dataPath)
   
-  
+  if (input$sizeLimiting) {
+    fulldata <<- readOMResult(dataPath, sampleSize)
+  } else{
+    fulldata <<- readOMResult(dataPath, NULL)
+  }
+  cat(length(file.l), "results files extracted \n")
+  meta_data <<- read_json(paste0(metadataPath, "/method.omr"))
+  cat("omr description  file loaded \n")
   
   
     #export

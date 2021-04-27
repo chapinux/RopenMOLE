@@ -1,4 +1,4 @@
-Evolution_metadataDisplayer <- function(meta_data){
+PSE_metadataDisplayer <- function(meta_data){
   genome <- unlist(meta_data$genome)
   genomeNames <- genome[names(genome) == "name"]
   genomeLows  <- genome[names(genome) == "low"] %>% as.numeric()
@@ -18,6 +18,27 @@ Evolution_metadataDisplayer <- function(meta_data){
   objectives <-  data.frame(name=objectivesNames, negative=objectivesNegative)
   
   
+  # grid caracteristics dataframe 
+  PSEgrid_dims <-  list()
+  PSEGrid_step <-  list()
+  PSEgrid_dimnames <- list()
+  for (i in 1:length(meta_data$grid)){
+    PSEgrid_dims[[i]] <- meta_data$grid[[i]][["grid"]] %>% unlist()
+    PSEgrid_dimnames[[i]] <- meta_data$grid[[i]][["objective"]] 
+    PSEGrid_step[[i]] <- diff(dim) %>% unique()
+  }
+  minimaGrid <- sapply(PSEgrid_dims, min) 
+  maximaGrid <- sapply(PSEgrid_dims, max) 
+
+  PSEgrid_df <- data.frame(name=PSEgrid_dimnames %>% unlist, 
+                           lower_bound= minimaGrid,
+                           upper_bound=maximaGrid,
+                           step=PSEGrid_step %>% unlist)
+
+  
+  
+
+
   
   
   saveOptions <- meta_data$`save-option` %>% unlist()
@@ -31,8 +52,8 @@ Evolution_metadataDisplayer <- function(meta_data){
     h3(paste0(meta_data$method," results (", meta_data$implementation, ")")),
     h4("genome"),
     renderTable(genome), 
-    h4("objectives"),
-    renderTable(objectives),
+    h4("PSE grid properties"),
+    renderTable(PSEgrid_df),
     hr(),
     h4("Details"),
     p(paste0("population size TODO  ", meta_data$`population-size`)), 
@@ -51,7 +72,11 @@ Evolution_metadataDisplayer <- function(meta_data){
     p("results location inside archive"), 
     renderText(meta_data$data),
     br(),
-    p(paste0("version : ",meta_data$version))
+    p(paste0("version : ",meta_data$version)),
+    br(),
+    p(paste0("OpebMOLE version : ",meta_data$`openmole-version`)),
+    br(),
+    renderText(meta_data$script)
   )#list
   
   return(metadata_list_display)
